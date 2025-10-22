@@ -2,6 +2,8 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../lib/utils.js";
+import { sendWelcomeEmail } from "../emails/emailHandler.js";
+import { ENV } from "../lib/env.js";
 
 export const signup = async (req, res) => {
   const { fullName, email, password } = req.body;
@@ -27,16 +29,16 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "Email already in use" });
     }
 
-    const salt = await bcrypt.genSalt(10)
-    const hashedPassword = await bcrypt.hash(password, salt)
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = new User({
       fullName,
       email,
-      password: hashedPassword
+      password: hashedPassword,
     });
 
-    if(newUser) {
+    if (newUser) {
       generateToken(newUser._id, res);
       await newUser.save();
 
@@ -48,11 +50,20 @@ export const signup = async (req, res) => {
       });
 
       // todo: send welcome email to user
-    }else{
-      console.log("Error in Signup Endpoint");
-      res.status(400).json({message: "Invalid user data" });
-    }
 
+      try {
+        await sendWelcomeEmail(
+          newUser.email,
+          newUser.fullName,
+          ENV.CLIENT_URL
+        );
+      } catch (error) {
+        console.error("Error sending welcome email:", error);
+      }
+    } else {
+      console.log("Error in Signup Endpoint");
+      res.status(400).json({ message: "Invalid user data" });
+    }
   } catch (error) {
     res.status(500).json({ message: "Internal server error" });
   }
